@@ -7,18 +7,40 @@ export default function Nav(){
   const [email, setEmail] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   useEffect(() => {
-    const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setEmail(user.email ?? null);
-        const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-        setRole(data?.role ?? null);
-      } else { setEmail(null); setRole(null); }
-    };
-    load();
-    const { data: sub } = supabase.auth.onAuthStateChange(() => load());
-    return () => { sub.subscription.unsubscribe(); };
-  }, []);
+  const load = async () => {
+    // 1) Obtén el usuario actual
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setEmail(null); setRole(null); return; }
+
+    setEmail(user.email ?? null);
+
+    // 2) Intenta leer el rol por ID
+    let { data, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    // 3) Si falla o no hay data, fallback por email
+    if (error || !data) {
+      const r = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('email', user.email)
+        .maybeSingle();
+      data = r.data ?? null;
+    }
+
+    setRole(data?.role ?? null);
+  };
+
+  load();
+
+  // Re-carga cuando cambie el auth state
+  const { data: sub } = supabase.auth.onAuthStateChange(() => load());
+  return () => { sub.subscription.unsubscribe(); };
+}, []);
+
   return (
     <header className="bg-white border-b">
       <div className="container flex items-center justify-between py-3">
