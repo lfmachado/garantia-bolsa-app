@@ -9,15 +9,37 @@ export default function Admin(){
   const [name, setName] = useState(''); const [desc, setDesc] = useState('');
   const [productId, setProductId] = useState<string>(''); const [percent, setPercent] = useState<number>(0);
   useEffect(() => {
-    const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { window.location.href = '/'; return; }
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
-      setRole(profile?.role || null);
-      const { data: prods } = await supabase.from('products').select('*').order('created_at',{ascending:false}); setProducts(prods || []);
-      const { data: g } = await supabase.from('product_guarantees').select('*'); setPgs(g || []);
-    }; load();
-  }, []);
+  const load = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { window.location.href = '/'; return; }
+
+    // Lee rol por id, con fallback por email
+    let { data: prof, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (error || !prof) {
+      const r = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('email', user.email)
+        .maybeSingle();
+      prof = r.data ?? null;
+    }
+
+    setRole(prof?.role || null);
+
+    // Carga catálogos
+    const { data: prods } = await supabase.from('products').select('*').order('created_at',{ascending:false});
+    setProducts(prods || []);
+    const { data: g } = await supabase.from('product_guarantees').select('*');
+    setPgs(g || []);
+  };
+  load();
+}, []);
+
   if (role !== 'admin') return <div className="card"><p>Solo <b>admin</b> puede acceder.</p></div>;
   async function addProduct(e: React.FormEvent){
     e.preventDefault();
